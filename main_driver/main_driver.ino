@@ -119,7 +119,7 @@ void sleep_context(){
   while (i<=100){
     analogWrite(TEMP_LED_COLD, i);
     analogWrite(TEMP_LED_WARM, 100-i);
-    delay(100);
+    delay(50);
     i = i+5;    
   }
 }
@@ -139,7 +139,7 @@ void wake_context(){
   while (i<=100){
     analogWrite(TEMP_LED_COLD, 100-i);
     analogWrite(TEMP_LED_WARM, i);
-    delay(100);
+    delay(50);
     i = i+5;    
   }
   
