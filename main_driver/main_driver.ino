@@ -22,11 +22,13 @@
 // Gabe Selzer, Rob Klock, Samarth Mathur, Ethan Brown, Sunny Shen
 
 #define PIN_LED 12
+#define TEMP_LED_COLD 2
+#define TEMP_LED_WARM 15
 #define trigPin 13
 #define echoPin 14
 #define BUTTON_PIN 5
 #define MAX_DISTANCE 700
-#define DISTANCE_THRESHOLD 5 //in centimeters
+#define DISTANCE_THRESHOLD 10 //in centimeters
 float timeOut = MAX_DISTANCE * 60;
 int soundVelocity = 340;
 
@@ -39,6 +41,7 @@ char* apiKey = SECRET_APIKEY;
 
 WiFiClient client;
 void send_webhook();
+void sleep_context();
 
 void setup() {
   // put your setup code here, to run once:
@@ -76,41 +79,47 @@ void loop() {
   delay(100);
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
-  // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
-  if( sonar_distance <= DISTANCE_THRESHOLD || button_state==LOW ) {
-    digitalWrite(PIN_LED, LOW); // turn off the light
-    Serial.println("pushed"); // Serial monitor debugging
-
   
+  // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
+  // Sleep context criteria
+  if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
+   sleep_context();
+  }
+  else 
+    digitalWrite(PIN_LED, 50); // turn on the light
+  }
+
+void sleep_context(){
+  // IF 
+  // Pressure sensor is on
+  // Sonar sensor is on 
+
+  // THEN  
+  // Play spotify
+  trigger_spotify_playback();
+
+  // Turn off room light
+  digitalWrite(PIN_LED, LOW); // turn off the green LED
+  
+  // Debug
+  Serial.println("pushed"); // Serial monitor debugging
+  
+  // Cool down temperature (increase the blue light, decrease the red light)
+  digitalWrite(PIN_LED, LOW); 
+  int i = 0;
+  while (i<=100){
+    analogWrite(TEMP_LED_COLD, i);
+    analogWrite(TEMP_LED_WARM, 255-i);
+    delay(3);
+    i = i+5;    
+  }
+
+}
+void trigger_spotify_playback(){
     HTTPClient http;
     String url = SECRET_TRIGGER;
     // Note that this triggers Rob's computer
     http.begin(url);
     Serial.println("sending Spotify Request");
     int httpResponseCode = http.GET();   
-  }
-  else 
-    digitalWrite(PIN_LED, HIGH); // turn on the light
-  }
-
-
-void send_webhook(){
-  Serial.println("Entered Send Webhook");
-  // construct the JSON payload
-  String jsonString = "";
-  jsonString += "{\"value1\":\"";
-  jsonString += "test";
-  jsonString += "\"}";
-  int jsonLength = jsonString.length();  
-  String lenString = String(jsonLength);
-  // connect to the Maker event server
-  client.connect("maker.ifttt.com", 80);
-  // construct the POST request
-  String url = SECRET_TRIGGER;
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-               "Host: " + host + "\r\n" +
-               "User-Agent: BuildFailureDetectorESP32\r\n" +
-               "Connection: close\r\n\r\n");
-  delay(500);
-  client.stop();
 }
