@@ -1,2 +1,7 @@
 **/arduino_secrets.h
 **/.DS_Store
+**/debug.cfg
+**/*.cfg
+**/*.svd
+
+**/*.json
