@@ -22,13 +22,15 @@
 // Gabe Selzer, Rob Klock, Samarth Mathur, Ethan Brown, Sunny Shen
 
 #define PIN_LED 12
-#define TEMP_LED_COLD 2
+#define TEMP_LED_COLD 0
 #define TEMP_LED_WARM 15
 #define trigPin 13
 #define echoPin 14
 #define BUTTON_PIN 5
 #define MAX_DISTANCE 700
 #define DISTANCE_THRESHOLD 10 //in centimeters
+int state = 0; // 0 = waking, 1 = sleeping
+
 float timeOut = MAX_DISTANCE * 60;
 int soundVelocity = 340;
 
@@ -42,6 +44,8 @@ char* apiKey = SECRET_APIKEY;
 WiFiClient client;
 void send_webhook();
 void sleep_context();
+void wake_context();
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -76,24 +80,30 @@ float getSonar() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  delay(100);
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
   
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   // Sleep context criteria
   if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
-   sleep_context();
+    if(state==1){
+      delay(500);
+    }
+    if (state==0){ 
+      sleep_context();
+      state=1;
+    }
   }
   else 
-    digitalWrite(PIN_LED, 50); // turn on the light
+    wake_context();
+    state=0;
+    delay(500);
   }
 
 void sleep_context(){
   // IF 
   // Pressure sensor is on
   // Sonar sensor is on 
-
   // THEN  
   // Play spotify
   trigger_spotify_playback();
@@ -102,24 +112,52 @@ void sleep_context(){
   digitalWrite(PIN_LED, LOW); // turn off the green LED
   
   // Debug
-  Serial.println("pushed"); // Serial monitor debugging
+  // Serial.println("pushed"); // Serial monitor debugging
   
   // Cool down temperature (increase the blue light, decrease the red light)
-  digitalWrite(PIN_LED, LOW); 
   int i = 0;
   while (i<=100){
     analogWrite(TEMP_LED_COLD, i);
-    analogWrite(TEMP_LED_WARM, 255-i);
-    delay(3);
+    analogWrite(TEMP_LED_WARM, 100-i);
+    delay(100);
     i = i+5;    
   }
+}
 
+void wake_context(){
+  // Pause spotify? For the sake of the demo
+  pause_spotify_playback();
+  
+  // Turn on room light
+  digitalWrite(PIN_LED, HIGH); // turn off the green LED
+  
+  // Debug
+  Serial.println("Waking Context..."); // Serial monitor debugging
+  
+  // Warm up temperature (decrease the blue light, increase the red light)
+  int i = 0;
+  while (i<=100){
+    analogWrite(TEMP_LED_COLD, 100-i);
+    analogWrite(TEMP_LED_WARM, i);
+    delay(100);
+    i = i+5;    
+  }
+  
+}
+
+void pause_spotify_playback(){
+  HTTPClient http;
+  String url = PAUSE_TRIGGER;
+  // Note that this triggers Rob's computer
+  http.begin(url);
+  Serial.println("Waking: Spotify Pause");
+  int httpResponseCode = http.GET();   
 }
 void trigger_spotify_playback(){
     HTTPClient http;
     String url = SECRET_TRIGGER;
     // Note that this triggers Rob's computer
     http.begin(url);
-    Serial.println("sending Spotify Request");
+    Serial.println("Sleeping: Spotify Play");
     int httpResponseCode = http.GET();   
 }
