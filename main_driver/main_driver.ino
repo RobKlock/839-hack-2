@@ -8,7 +8,7 @@
 #include <WiFiServer.h>
 #include <WiFiType.h>
 #include <WiFiUdp.h>
-#include <ArduinoJson.h>
+
 
 #include <HTTPClient.h>
 #include <SPI.h>
@@ -26,7 +26,7 @@
 #define echoPin 14
 #define BUTTON_PIN 5
 #define MAX_DISTANCE 700
-#define DISTANCE_THRESHOLD 40 //in centimeters
+#define DISTANCE_THRESHOLD 5 //in centimeters
 float timeOut = MAX_DISTANCE * 60;
 int soundVelocity = 340;
 
@@ -55,28 +55,6 @@ void setup() {
       Serial.println("Can't Connect");
     }
     Serial.println("Wifi Connected");
-    Serial.println("pushed"); // Serial monitor debugging
-
-  
-      HTTPClient http;
-
-      const int httpPort = 80;
-      if (!client.connect(host, httpPort)) {
-        return;
-      }
-
-      String url = SECRET_TRIGGER;
-      http.begin(client, url);
-  
-      http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-      
-      String httpRequestData = "";           
-      
-      int httpResponseCode = http.POST(httpRequestData);
-      http.end();
-      // Send Webook to IFTTT
-      Serial.println(httpResponseCode);
-      send_webhook();
      
 }
 float getSonar() {
@@ -101,6 +79,15 @@ void loop() {
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   if( sonar_distance <= DISTANCE_THRESHOLD || button_state==LOW ) {
     digitalWrite(PIN_LED, LOW); // turn off the light
+    Serial.println("pushed"); // Serial monitor debugging
+
+  
+    HTTPClient http;
+    String url = SECRET_TRIGGER;
+    // Note that this triggers Rob's computer
+    http.begin(url);
+    Serial.println("sending Spotify Request");
+    int httpResponseCode = http.GET();   
   }
   else 
     digitalWrite(PIN_LED, HIGH); // turn on the light
