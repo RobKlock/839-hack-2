@@ -1,9 +1,11 @@
 // 839 Hack 2 Main Driver
 // This is where everything should happen, integrate things here instead of their own files :)
+// Make a local file called arduino_secrets.h to test on your home wifi/whatever
 
 // Gabe Selzer, Rob Klock, Samarth Mathur, Ethan Brown, Sunny Shen
 #include <SPI.h>
 #include <WiFi.h>
+#include "arduino_secrets.h"
 
 #define PIN_LED 12
 #define trigPin 13
@@ -12,7 +14,12 @@
 #define MAX_DISTANCE 700
 float timeOut = MAX_DISTANCE * 60;
 int soundVelocity = 340;
-char pass[] = SECRET_SOMETHING; 
+
+const char* ssid = SECRET_SSID; // Fill in real value in arduino_secrets.h
+const char* password = SECRET_PASSWORD;
+const char* host = "maker.ifttt.com";
+const char* trigger = SECRET_TRIGGER;
+const char* apiKey = SECRET_APIKEY;
 
 
 void setup() {
