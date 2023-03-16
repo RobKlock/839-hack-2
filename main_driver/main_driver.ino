@@ -20,8 +20,10 @@
 // Make a local file called arduino_secrets.h to test on your home wifi/whatever
 
 // Gabe Selzer, Rob Klock, Samarth Mathur, Ethan Brown, Sunny Shen
+// macos note: change upload speed to 115200 to avoid errors
 
 #define PIN_LED 12
+#define pin_led_button 33
 #define TEMP_LED_COLD 0
 #define TEMP_LED_WARM 15
 #define trigPin 13
@@ -29,7 +31,7 @@
 #define BUTTON_PIN 5
 #define MAX_DISTANCE 700
 #define DISTANCE_THRESHOLD 10 //in centimeters
-int state = 0; // 0 = waking, 1 = sleeping
+int state = 2; // 0 = waking, 1 = sleeping, 2 = data collection
 
 float timeOut = MAX_DISTANCE * 60;
 int soundVelocity = 340;
@@ -82,8 +84,13 @@ void loop() {
   // put your main code here, to run repeatedly:
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
-  
+  Serial.println(button_state);
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
+  // Data collection context 
+  if (state == 2){
+    Serial.println("Data Collection");
+  }
+  
   // Sleep context criteria
   if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
     if(state==1){
