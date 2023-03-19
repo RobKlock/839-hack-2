@@ -13,6 +13,8 @@
 #include <HTTPClient.h>
 #include <SPI.h>
 #include <WiFi.h>
+#include <ArduinoJson.h>
+
 #include "arduino_secrets.h"
 
 // 839 Hack 2 Main Driver
@@ -29,9 +31,19 @@
 #define trigPin 13
 #define echoPin 14
 #define BUTTON_PIN 5
+#define LABEL_PIN 18
 #define MAX_DISTANCE 700
 #define DISTANCE_THRESHOLD 10 //in centimeters
+
+// Writer for data collection 
+// PrintWriter output; 
+// Serial dataWriter; 
+
 int state = 2; // 0 = waking, 1 = sleeping, 2 = data collection
+
+// HTTP Request 
+HTTPClient http;
+String url="https://<IPaddress>/testurl";
 
 float timeOut = MAX_DISTANCE * 60;
 int soundVelocity = 340;
@@ -57,13 +69,17 @@ void setup() {
   //pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(BUTTON_PIN, INPUT);
   Serial.begin(115200);
-
+  if(state != 2){ 
   WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       Serial.println("Can't Connect");
     }
     Serial.println("Wifi Connected");
+  }
+  // dataWriter = new Serial( this, Serial.list()[0], 9600 );
+  // output = createWriter( "data.txt" );
+  
      
 }
 float getSonar() {
@@ -84,12 +100,8 @@ void loop() {
   // put your main code here, to run repeatedly:
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
-  Serial.println(button_state);
+  // Serial.println(button_state);
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
-  // Data collection context 
-  if (state == 2){
-    Serial.println("Data Collection");
-  }
   
   // Sleep context criteria
   if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
@@ -101,11 +113,22 @@ void loop() {
       state=1;
     }
   }
-  else 
+  else if(state != 2){
     wake_context();
     state=0;
     delay(500);
   }
+  // Data collection context 
+  else{
+    float label_state = digitalRead(LABEL_PIN);
+     // Serial.println("Data Collection");
+     if ( sonar_distance ) {
+          // Serial.println( sonar_distance );
+          Serial.println( label_state );
+         }
+  }
+}
+
 
 void sleep_context(){
   // IF 
