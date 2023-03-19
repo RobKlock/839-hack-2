@@ -1,0 +1,52 @@
+<!doctype html>
+<title>JavaScript Example</title>
+<link rel="stylesheet" href="https://unpkg.com/sakura.css@1.0.0/css/normalize.css">
+<link rel="stylesheet" href="https://unpkg.com/sakura.css@1.0.0/css/sakura-earthly.css">
+<style>
+  ul { margin: 0; padding: 0; display: flex; list-style-type: none; }
+  li > * { padding: 1em; }
+  li.active > a { color: #5e5e5e; border-bottom: 2px solid #4a4a4a; }
+  label > input { width: 3em; }
+  form > * { padding-right: 1em; }
+  #result { font-weight: bold; }
+</style>
+<hr>
+<p>Holistic bedtime System Calibrator</p>
+<hr>
+<form id="calc">
+  <label>sonar <input name="sonar"></label>
+  <p>
+  <label>bed sensor <input name="bed_sensor", type="checkbox"></label>
+  <input type="submit" value="Calibrate">
+</form>
+<span>Sonar Data: <span id="sonar_data"></span></span>
+<br>
+<span>Bed Sensor Data: <span id="sensor_data"></span></span>
+<script src="https://unpkg.com/promise-polyfill@7.1.2/dist/polyfill.min.js"></script>
+<script src="https://unpkg.com/whatwg-fetch@2.0.4/fetch.js"></script>
+<script>
+  function addSubmit(ev) {
+    ev.preventDefault();
+    fetch({{ url_for('calibrate')|tojson }}, {
+      method: 'POST',
+      body: new FormData(this)
+    })
+      .then(parseJSON)
+      .then(addShow);
+  }
+
+  function parseJSON(response) {
+    return response.json();
+  }
+
+  function addShow(data) {
+    var span_sonar = document.getElementById('sonar_data');
+    span_sonar.innerText = data.sonar_data;
+
+    var span_sensor = document.getElementById('sensor_data');
+    span_sensor.innerText = data.sensor_data;
+  }
+
+  var form = document.getElementById('calc');
+  form.addEventListener('submit', addSubmit);
+</script>
