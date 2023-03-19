@@ -13,15 +13,18 @@
 <hr>
 <p>Holistic bedtime System Calibrator</p>
 <hr>
+<span id="Calibration Directions">To begin, lay on your bed. For a robust calibration, adjust your position between button pushes.</span>
+<p>
+<span id="Calibration Update">Press the button 10 more times!</span>
+<hr>
 <form id="calc">
-  <label>sonar <input name="sonar"></label>
-  <p>
-  <label>bed sensor <input name="bed_sensor", type="checkbox"></label>
   <input type="submit" value="Calibrate">
 </form>
 <span>Sonar Data: <span id="sonar_data"></span></span>
 <br>
 <span>Bed Sensor Data: <span id="sensor_data"></span></span>
+<br>
+<span>Label Data: <span id="label_data"></span></span>
 <script src="https://unpkg.com/promise-polyfill@7.1.2/dist/polyfill.min.js"></script>
 <script src="https://unpkg.com/whatwg-fetch@2.0.4/fetch.js"></script>
 <script>
@@ -40,11 +43,30 @@
   }
 
   function addShow(data) {
-    var span_sonar = document.getElementById('sonar_data');
-    span_sonar.innerText = data.sonar_data;
+    if (data.sonar_data != null) {
+      var span_sonar = document.getElementById('sonar_data');
+      span_sonar.innerText = data.sonar_data;
+    }
 
-    var span_sensor = document.getElementById('sensor_data');
-    span_sensor.innerText = data.sensor_data;
+    if (data.sensor_data != null) {
+      var span_sensor = document.getElementById('sensor_data');
+      span_sensor.innerText = data.sensor_data;
+    }
+
+    if (data.label_data != null) {
+      var span_label = document.getElementById('label_data');
+      span_label.innerText = data.label_data;
+    }
+
+    if (data.message != null) {
+      var span_message = document.getElementById('Calibration Update')
+      span_message.innerText = data.message
+    }
+
+    if (data.directions != null) {
+      var span_directions = document.getElementById('Calibration Directions')
+      span_directions.innerText = data.directions
+    }
   }
 
   var form = document.getElementById('calc');
