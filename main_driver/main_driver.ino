@@ -35,6 +35,10 @@
 #define MAX_DISTANCE 700
 #define DISTANCE_THRESHOLD 10 //in centimeters
 
+unsigned long currentTime;
+unsigned long startTime;
+unsigned long savePeriod = 3000;
+
 // Writer for data collection 
 // PrintWriter output; 
 // Serial dataWriter; 
@@ -101,6 +105,10 @@ void loop() {
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
   // Serial.println(button_state);
+
+  Serial.println("—————");
+  StaticJsonDocument<300> json_doc;
+  // JsonObject JSONencoder = JSONbuffer.createObject();
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   
   // Sleep context criteria
@@ -120,15 +128,61 @@ void loop() {
   }
   // Data collection context 
   else{
+    float sonar_distance = getSonar();
+    float button_state = digitalRead(BUTTON_PIN);
     float label_state = digitalRead(LABEL_PIN);
-     // Serial.println("Data Collection");
-     if ( sonar_distance ) {
-          // Serial.println( sonar_distance );
-          Serial.println( label_state );
-         }
-  }
+    bool collect_data = false;
+    JsonArray& labels = json_doc.createNestedArray("labels");
+    JsonArray& sonar = json_doc.createNestedArray("sonar");
+    JsonArray& bed_sensor = json_doc.createNestedArray("bed_sensor");
+
+    // Press the Label Button once to initiate data collection
+    if(label_state == 0){
+      collect_data = true;
+    }
+    while(collect_data){
+      // Lay in bed, hold down the label button while in bed
+      labels.add(label_state);
+      sonar.add(sonar_distance);
+      bed_sensor.add(button_state);
+      // Leave bed, let go of label button
+      if (label_state == 1){
+        collect_data = false
+      }
+    }
+    // Collect for a few seconds after we leave bed
+    start_time = millis();
+    if (millis() - startTime >= savePeriod)
+    {
+     
+      Serial.println("\tSaving JSON Object");
+      JSONencoder.prettyPrintTo(Serial);
+      Serial.println();
+    }
+    }
 }
 
+// void collect_data(JSONbuffer){
+//   bool collection_start = false;
+
+//   // Press the Label Button once to initiate data collection
+//   float label_state = digitalRead(LABEL_PIN);
+
+//   JsonArray& labels = JSONencoder.createNestedArray("labels");
+//   JsonArray& sonar = JSONencoder.createNestedArray("sonar");
+//   JsonArray& bed_sensor = JSONencoder.createNestedArray("bed_sensor");
+  
+//   if(label_state == 0){
+//     labels.add(20);
+//     sonar.add();
+//     bed_sensor.add();
+//   }
+//   // Lay in bed, hold down the label button while in bed
+
+//   // Leave bed, let go of label button
+
+//   // After a few seconds, stop collecting and construct the JSON object
+// }
 
 void sleep_context(){
   // IF 
