@@ -10,6 +10,7 @@ From this directory:
 python -m venv venv
 . venv/bin/activate
 pip install Flask
+pip install scikit-learn
 ```
 
 # Launching the Server

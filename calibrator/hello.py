@@ -1,6 +1,8 @@
 from typing import List
 from flask import Flask, jsonify, render_template, request
 import requests
+
+from learn import process_inputs, LogisticRegressionModel, DecisionTreeModel
 app = Flask(__name__)
 
 # Shamelessly copied from https://github.com/pallets/flask/tree/2.0.3/examples/javascript
@@ -8,7 +10,7 @@ app = Flask(__name__)
 # Store sensor data in arrays, for now.
 sonar_data: List[float] = []
 button_data: List[int] = []
-labels: List[int] = []
+label_data: List[int] = []
 
 # Calibration state
 learning_complete: bool = False
@@ -22,8 +24,12 @@ def index():
 
 
 def learn():
-    # TODO: Learn!
-    pass
+    data,labels=process_inputs([{'sonar': sonar_data, 'bed_sensor': button_data, 'labels': label_data}])
+    Tree=DecisionTreeModel()
+    Tree.learn(data,labels)
+    LR=LogisticRegressionModel()
+    LR.learn(data,labels)
+    print(LR)
 
 
 def add_sample():
@@ -34,7 +40,7 @@ def add_sample():
     elif isinstance(latest_data["sonar"], float):
         sonar_data.append(latest_data["sonar"])
         button_data.append(latest_data["bed_sensor"])
-    labels.append(current_label)
+    label_data.append(current_label)
     
 
 @app.route("/calibrate", methods=["POST"])
@@ -72,7 +78,7 @@ def calibrate():
     json_kwargs = dict(
         sonar_data = str(sonar_data),
         sensor_data = str(button_data),
-        label_data = str(labels),
+        label_data = str(label_data),
         message = message,
     )
     if "direction" in locals():
