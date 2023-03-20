@@ -56,7 +56,7 @@ def calibrate():
         if samples_remaining == 0:
             current_label = True
             samples_remaining = samples_per_label
-            direction = "Now, get up off of the bed. Continue to press the button. For a robust calibration, press the button from different locations around the room."
+            direction = "Now, lay on your bed. Once you are in a sleeping position, continue to press the button. For a robust calibration, adjust your position between button pushes."
             message = f"Press the button {samples_remaining} more times!"
         else:
             message = f"Press the button {samples_remaining} more times!"

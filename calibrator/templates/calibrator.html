@@ -13,7 +13,7 @@
 <hr>
 <p>Holistic bedtime System Calibrator</p>
 <hr>
-<span id="Calibration Directions">To begin, lay on your bed. For a robust calibration, adjust your position between button pushes.</span>
+<span id="Calibration Directions">To begin, stay off of your bed and press the button. For a robust calibration, press the button from different locations around the room.</span>
 <p>
 <span id="Calibration Update">Press the button 10 more times!</span>
 <hr>
@@ -63,9 +63,13 @@
       span_message.innerText = data.message
     }
 
-    if (data.directions != null) {
-      var span_directions = document.getElementById('Calibration Directions')
-      span_directions.innerText = data.directions
+    if (data.direction != null) {
+      var span_direction = document.getElementById('Calibration Directions')
+      span_direction.innerText = data.direction
+      span_direction.style.color = "red"
+    }
+    else {
+
     }
   }
 
