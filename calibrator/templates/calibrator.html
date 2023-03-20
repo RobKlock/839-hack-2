@@ -1,5 +1,5 @@
 <!doctype html>
-<title>JavaScript Example</title>
+<title>Holistic bedtime System Calibrator</title>
 <link rel="stylesheet" href="https://unpkg.com/sakura.css@1.0.0/css/normalize.css">
 <link rel="stylesheet" href="https://unpkg.com/sakura.css@1.0.0/css/sakura-earthly.css">
 <style>
@@ -9,6 +9,8 @@
   label > input { width: 3em; }
   form > * { padding-right: 1em; }
   #result { font-weight: bold; }
+  #buttons { display: flex;}
+  #clear {margin-left: 1em;}
 </style>
 <hr>
 <p>Holistic bedtime System Calibrator</p>
@@ -17,17 +19,43 @@
 <p>
 <span id="Calibration Update">Press the button 10 more times!</span>
 <hr>
-<form id="calc">
-  <input type="submit" value="Calibrate">
-</form>
-<span>Sonar Data: <span id="sonar_data"></span></span>
-<br>
-<span>Bed Sensor Data: <span id="sensor_data"></span></span>
-<br>
-<span>Label Data: <span id="label_data"></span></span>
+<div id="buttons">
+  <form id="calc">
+    <input type="submit" value="Calibrate">
+  </form>
+  <form id="clear">
+    <input type="submit" value="Clear">
+  </form>
+</div>
+<div id="data">
+  <span>Sonar Data: <span id="sonar_data"></span></span>
+  <br>
+  <span>Bed Sensor Data: <span id="sensor_data"></span></span>
+  <br>
+  <span>Label Data: <span id="label_data"></span></span>
+</div>
+
 <script src="https://unpkg.com/promise-polyfill@7.1.2/dist/polyfill.min.js"></script>
 <script src="https://unpkg.com/whatwg-fetch@2.0.4/fetch.js"></script>
 <script>
+  function clearData(ev) {
+    ev.preventDefault();
+    fetch({{ url_for('calibrate')|tojson }}, {
+      method: 'DELETE',
+      body: new FormData(this)
+    })
+    let parents = ['sonar_data', 'sensor_data', 'label_data']
+    parents.forEach(element => {
+      var parent = document.getElementById(element);
+      while (parent.firstChild) {
+        parent.removeChild(parent.firstChild);
+      }
+    });
+    document.getElementById('Calibration Directions').innerText = "To begin, stay off of your bed and press the button. For a robust calibration, press the button from different locations around the room.";
+    document.getElementById('Calibration Directions').style.color = "black";
+    document.getElementById('Calibration Update').innerText = "Press the button 10 more times!";
+  }
+
   function addSubmit(ev) {
     ev.preventDefault();
     fetch({{ url_for('calibrate')|tojson }}, {
@@ -75,4 +103,5 @@
 
   var form = document.getElementById('calc');
   form.addEventListener('submit', addSubmit);
+  document.getElementById('clear').addEventListener('submit', clearData);
 </script>

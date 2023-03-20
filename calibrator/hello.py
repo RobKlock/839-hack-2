@@ -43,12 +43,22 @@ def add_sample():
     label_data.append(current_label)
     
 
-@app.route("/calibrate", methods=["POST"])
+@app.route("/calibrate", methods=["POST", "DELETE"])
 def calibrate():
     global current_label
     global samples_per_label
     global samples_remaining
     global learning_complete
+
+    if request.method == "DELETE":
+        learning_complete = False
+        samples_per_label = 10
+        current_label = False
+        samples_remaining = samples_per_label
+        sonar_data.clear()
+        button_data.clear()
+        label_data.clear()
+        return "Clear Completed"
 
     if learning_complete:
         return "{}"
