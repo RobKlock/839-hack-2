@@ -33,17 +33,17 @@
 #define BUTTON_PIN 5
 #define LABEL_PIN 18
 #define MAX_DISTANCE 700
-#define DISTANCE_THRESHOLD 10 //in centimeters
+#define DISTANCE_THRESHOLD 10 // in centimeters
 
 unsigned long currentTime;
 unsigned long startTime;
-unsigned long savePeriod = 3000;
+unsigned long savePeriod = 4000; // ms
 
 // Writer for data collection 
 // PrintWriter output; 
 // Serial dataWriter; 
 
-int state = 2; // 0 = waking, 1 = sleeping, 2 = data collection
+int state = 2; // 0 = waking, 1 = sleeping, 2 = data collection, 3 = calibration/debugging
 
 // HTTP Request 
 HTTPClient http;
@@ -73,18 +73,12 @@ void setup() {
   //pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(BUTTON_PIN, INPUT);
   Serial.begin(115200);
-  if(state != 2){ 
   WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
       Serial.println("Can't Connect");
     }
     Serial.println("Wifi Connected");
-  }
-  // dataWriter = new Serial( this, Serial.list()[0], 9600 );
-  // output = createWriter( "data.txt" );
-  
-     
 }
 float getSonar() {
 	unsigned long pingTime;
@@ -106,7 +100,8 @@ void loop() {
   float button_state = digitalRead(BUTTON_PIN);
   // Serial.println(button_state);
 
-  StaticJsonDocument<50000> json_doc;
+  StaticJsonDocument<5000> json_doc;
+  // DynamicJsonDocument<5000> test_ping;
   // JsonObject JSONencoder = JSONbuffer.createObject();
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   
@@ -120,11 +115,22 @@ void loop() {
       state=1;
     }
   }
+  // Bed calibration
+  else if(state == 3){
+    float sonar_distance = getSonar();
+    float button_state = digitalRead(BUTTON_PIN);
+    float label_state = digitalRead(LABEL_PIN);
+    Serial.println(button_state);
+    Serial.println(label_state);
+    Serial.println(sonar_distance);
+    Serial.println("======");
+  }
   else if(state != 2){
     wake_context();
     state=0;
     delay(500);
   }
+  
   // Data collection context 
   else{
     float sonar_distance = getSonar();
@@ -141,12 +147,13 @@ void loop() {
       Serial.println("Collecting data");
       collect_data = true;
     }
+    // Change to collect data every second or so
     while(collect_data){
       sonar_distance = getSonar();
       button_state = digitalRead(BUTTON_PIN);
       label_state = digitalRead(LABEL_PIN);
       
-      Serial.println(".");
+      // Serial.println(".");
       // Lay in bed, hold down the label button while in bed
       labels.add(label_state);
       sonar.add(sonar_distance);
@@ -163,12 +170,20 @@ void loop() {
           labels.add(label_state);
           sonar.add(sonar_distance);
           bed_sensor.add(button_state);
-          Serial.println(".");
+          // Serial.println(".");
         }
         collect_data = false;
-        Serial.println("\tSaving JSON Object");
-        serializeJsonPretty(json_doc, Serial);
-        Serial.println();
+        Serial.println("\Sending JSON Object");
+        HTTPClient http;
+
+        http.begin("http://3.138.135.239:3000/data");
+        http.addHeader("Content-Type", "application/json"); 
+        String json;
+        serializeJson(json_doc, json);
+        int httpResponseCode = http.POST(json);
+        Serial.println("Sent Json with response: ");
+        Serial.print(httpResponseCode);
+        // serializeJsonPretty(json_doc, Serial);
       }
     }
   }
