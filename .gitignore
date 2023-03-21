@@ -5,3 +5,6 @@
 **/*.svd
 
 **/*.json
+
+calibrator/venv
+**/*.py[co]

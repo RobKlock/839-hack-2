@@ -1,0 +1,107 @@
+<!doctype html>
+<title>Holistic bedtime System Calibrator</title>
+<link rel="stylesheet" href="https://unpkg.com/sakura.css@1.0.0/css/normalize.css">
+<link rel="stylesheet" href="https://unpkg.com/sakura.css@1.0.0/css/sakura-earthly.css">
+<style>
+  ul { margin: 0; padding: 0; display: flex; list-style-type: none; }
+  li > * { padding: 1em; }
+  li.active > a { color: #5e5e5e; border-bottom: 2px solid #4a4a4a; }
+  label > input { width: 3em; }
+  form > * { padding-right: 1em; }
+  #result { font-weight: bold; }
+  #buttons { display: flex;}
+  #clear {margin-left: 1em;}
+</style>
+<hr>
+<p>Holistic bedtime System Calibrator</p>
+<hr>
+<span id="Calibration Directions">To begin, stay off of your bed and press the button. For a robust calibration, press the button from different locations around the room.</span>
+<p>
+<span id="Calibration Update">Press the button 10 more times!</span>
+<hr>
+<div id="buttons">
+  <form id="calc">
+    <input type="submit" value="Calibrate">
+  </form>
+  <form id="clear">
+    <input type="submit" value="Clear">
+  </form>
+</div>
+<div id="data">
+  <span>Sonar Data: <span id="sonar_data"></span></span>
+  <br>
+  <span>Bed Sensor Data: <span id="sensor_data"></span></span>
+  <br>
+  <span>Label Data: <span id="label_data"></span></span>
+</div>
+
+<script src="https://unpkg.com/promise-polyfill@7.1.2/dist/polyfill.min.js"></script>
+<script src="https://unpkg.com/whatwg-fetch@2.0.4/fetch.js"></script>
+<script>
+  function clearData(ev) {
+    ev.preventDefault();
+    fetch({{ url_for('calibrate')|tojson }}, {
+      method: 'DELETE',
+      body: new FormData(this)
+    })
+    let parents = ['sonar_data', 'sensor_data', 'label_data']
+    parents.forEach(element => {
+      var parent = document.getElementById(element);
+      while (parent.firstChild) {
+        parent.removeChild(parent.firstChild);
+      }
+    });
+    document.getElementById('Calibration Directions').innerText = "To begin, stay off of your bed and press the button. For a robust calibration, press the button from different locations around the room.";
+    document.getElementById('Calibration Directions').style.color = "black";
+    document.getElementById('Calibration Update').innerText = "Press the button 10 more times!";
+  }
+
+  function addSubmit(ev) {
+    ev.preventDefault();
+    fetch({{ url_for('calibrate')|tojson }}, {
+      method: 'POST',
+      body: new FormData(this)
+    })
+      .then(parseJSON)
+      .then(addShow);
+  }
+
+  function parseJSON(response) {
+    return response.json();
+  }
+
+  function addShow(data) {
+    if (data.sonar_data != null) {
+      var span_sonar = document.getElementById('sonar_data');
+      span_sonar.innerText = data.sonar_data;
+    }
+
+    if (data.sensor_data != null) {
+      var span_sensor = document.getElementById('sensor_data');
+      span_sensor.innerText = data.sensor_data;
+    }
+
+    if (data.label_data != null) {
+      var span_label = document.getElementById('label_data');
+      span_label.innerText = data.label_data;
+    }
+
+    if (data.message != null) {
+      var span_message = document.getElementById('Calibration Update')
+      span_message.innerText = data.message
+    }
+
+    if (data.direction != null) {
+      var span_direction = document.getElementById('Calibration Directions')
+      span_direction.innerText = data.direction
+      span_direction.style.color = "red"
+    }
+    else {
+
+    }
+  }
+
+  var form = document.getElementById('calc');
+  form.addEventListener('submit', addSubmit);
+  document.getElementById('clear').addEventListener('submit', clearData);
+</script>
