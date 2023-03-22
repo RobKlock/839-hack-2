@@ -37,7 +37,8 @@
 
 unsigned long currentTime;
 unsigned long startTime;
-unsigned long savePeriod = 4000; // ms
+unsigned long savePeriod = 3000; // ms
+static const unsigned long REFRESH_INTERVAL = 1500; // ms
 
 // Writer for data collection 
 // PrintWriter output; 
@@ -133,8 +134,11 @@ void loop() {
   
   // Data collection context 
   else{
-    float sonar_distance = getSonar();
-    float button_state = digitalRead(BUTTON_PIN);
+    HTTPClient http;
+    http.begin("http://3.138.135.239:3000/data");
+    http.addHeader("Content-Type", "application/json"); 
+    // float sonar_distance = getSonar();
+    // float button_state = digitalRead(BUTTON_PIN);
     float label_state = digitalRead(LABEL_PIN);
     bool collect_data = false;
 
@@ -149,42 +153,75 @@ void loop() {
     }
     // Change to collect data every second or so
     while(collect_data){
-      sonar_distance = getSonar();
-      button_state = digitalRead(BUTTON_PIN);
-      label_state = digitalRead(LABEL_PIN);
-      
-      // Serial.println(".");
-      // Lay in bed, hold down the label button while in bed
-      labels.add(label_state);
-      sonar.add(sonar_distance);
-      bed_sensor.add(button_state);
-      
-      // Leave bed, let go of label button
-      if (label_state == 1){
-        Serial.println("Data collection halting");
-        startTime = millis();
-        while (millis() - startTime <= savePeriod){ 
-          sonar_distance = getSonar();
-          button_state = digitalRead(BUTTON_PIN);
-          label_state = digitalRead(LABEL_PIN);
-          labels.add(label_state);
-          sonar.add(sonar_distance);
-          bed_sensor.add(button_state);
-          // Serial.println(".");
-        }
-        collect_data = false;
-        Serial.println("\Sending JSON Object");
-        HTTPClient http;
-
-        http.begin("http://3.138.135.239:3000/data");
-        http.addHeader("Content-Type", "application/json"); 
+        
+      static unsigned long lastRefreshTime = 0;
+      if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
+        JsonArray labels = json_doc.createNestedArray("labels");
+        JsonArray sonar = json_doc.createNestedArray("sonar");
+        JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
+        
+        lastRefreshTime += REFRESH_INTERVAL;
+        
+        sonar_distance = getSonar();
+        button_state = digitalRead(BUTTON_PIN);
+        label_state = digitalRead(LABEL_PIN);
+        
+        labels.add(label_state);
+        sonar.add(sonar_distance);
+        bed_sensor.add(button_state);
+        
         String json;
         serializeJson(json_doc, json);
         int httpResponseCode = http.POST(json);
-        Serial.println("Sent Json with response: ");
+        Serial.print("Sent Json with response: ");
         Serial.print(httpResponseCode);
+        Serial.println("");
+
+        if (label_state == 1){
+          Serial.println("Halting");
+          
+          startTime = millis();
+          while (millis() - startTime <= savePeriod){ 
+              JsonArray labels = json_doc.createNestedArray("labels");
+              JsonArray sonar = json_doc.createNestedArray("sonar");
+              JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
+
+              sonar_distance = getSonar();
+              button_state = digitalRead(BUTTON_PIN);
+              label_state = digitalRead(LABEL_PIN);
+              
+              labels.add(label_state);
+              sonar.add(sonar_distance);
+              bed_sensor.add(button_state);
+
+              String json;
+              serializeJson(json_doc, json);
+              int httpResponseCode = http.POST(json);
+              Serial.print("Sent Json with response: ");
+              Serial.print(httpResponseCode);
+              Serial.println("");
+          }
+        collect_data = false;
+        } 
+	    }
+      // // Leave bed, let go of label button
+      
+      //   Serial.println("Data collection halting");
+      //   startTime = millis();
+      //   while (millis() - startTime <= savePeriod){ 
+      //     sonar_distance = getSonar();
+      //     button_state = digitalRead(BUTTON_PIN);
+      //     label_state = digitalRead(LABEL_PIN);
+      //     labels.add(label_state);
+      //     sonar.add(sonar_distance);
+      //     bed_sensor.add(button_state);
+      //     // Serial.println(".");
+      //   }
+        
+        // collect_data = false;
+        // Serial.println("\Sending JSON Object");
+        
         // serializeJsonPretty(json_doc, Serial);
-      }
     }
   }
 }
