@@ -11,6 +11,7 @@ python -m venv venv
 . venv/bin/activate
 pip install Flask
 pip install scikit-learn
+pip install requests
 ```
 
 # Launching the Server
