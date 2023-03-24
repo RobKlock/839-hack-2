@@ -2,7 +2,7 @@ from sklearn import tree
 from sklearn.linear_model import LogisticRegression
 import urllib.request
 import json,os
-
+import numpy as np
 
 
 def download_data(urlstring='http://3.138.135.239:3000',forced=False):
@@ -18,6 +18,19 @@ def download_data(urlstring='http://3.138.135.239:3000',forced=False):
                 json.dump(raw_data, f)
     return raw_data
 
+def post_settings(urlstring='http://3.138.135.239:3000',settings=None):
+    surl=urlstring+'/settings'
+    with urllib.request.urlopen(surl) as url:
+        d=json.loads(url.read())
+    for key in settings:
+        d[key]=settings[key]
+    print('posting settings:',d)
+    req =  urllib.request.Request(surl)
+    req.add_header('Content-Type', 'application/json')
+    response=urllib.request.urlopen(req, json.dumps(d).encode('utf-8'))
+    print("response form post:",response)
+    
+
 
 def process_inputs(raw_data,features=['sonar','bed_sensor']):
     '''
@@ -29,7 +42,6 @@ def process_inputs(raw_data,features=['sonar','bed_sensor']):
     '''
 
     #Clean the inputs
-    print(raw_data)
     clean_data=[]
     required_inputs=['labels']+features
     for line in raw_data:
@@ -81,11 +93,17 @@ def main():
     print("I do the learning!")
 
     raw_data=download_data()
-    data,labels=process_inputs(raw_data[-8])
+    data,labels=process_inputs(raw_data)
     Tree=DecisionTreeModel()
     Tree.learn(data,labels)
     LR=LogisticRegressionModel()
     LR.learn(data,labels)
+    w=LR.clf.coef_.tolist()
+    b=LR.clf.intercept_.tolist()
+    d={'logistic_regression_weights':{'w':w,'b':b}}
+    post_settings(settings=d)
+    
+
     
 
 if __name__ == "__main__":
