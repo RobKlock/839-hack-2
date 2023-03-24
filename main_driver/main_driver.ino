@@ -14,7 +14,6 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
-
 #include "arduino_secrets.h"
 
 // 839 Hack 2 Main Driver
@@ -40,11 +39,11 @@ unsigned long startTime;
 unsigned long savePeriod = 3000; // ms
 static const unsigned long REFRESH_INTERVAL = 1500; // ms
 
-// Writer for data collection 
-// PrintWriter output; 
-// Serial dataWriter; 
+float log_reg_w1;
+float log_reg_w2;
+float log_reg_b; 
 
-int state = 2; // 0 = waking, 1 = sleeping, 2 = data collection, 3 = calibration/debugging
+int state = 2; // 0 = waking, 1 = sleeping, 2 = calibration/debugging
 
 // HTTP Request 
 HTTPClient http;
@@ -71,15 +70,20 @@ void setup() {
   pinMode(PIN_LED, OUTPUT);
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
+
+ // 
   //pinMode(BUTTON_PIN, INPUT_PULLUP);
   pinMode(BUTTON_PIN, INPUT);
   Serial.begin(115200);
   WiFi.begin(ssid, password);
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.println("Can't Connect");
-    }
-    Serial.println("Wifi Connected");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.println("Can't Connect");
+  }
+  Serial.println("Wifi Connected");
+  
+  get_parameters();
+  
 }
 float getSonar() {
 	unsigned long pingTime;
@@ -96,16 +100,12 @@ float getSonar() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
-  // Serial.println(button_state);
 
   StaticJsonDocument<5000> json_doc;
-  // DynamicJsonDocument<5000> test_ping;
-  // JsonObject JSONencoder = JSONbuffer.createObject();
-  // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   
+  // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   // Sleep context criteria
   if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
     if(state==1){
@@ -137,26 +137,14 @@ void loop() {
     HTTPClient http;
     http.begin("http://3.138.135.239:3000/data");
     http.addHeader("Content-Type", "application/json"); 
-    // float sonar_distance = getSonar();
-    // float button_state = digitalRead(BUTTON_PIN);
-    float label_state = digitalRead(LABEL_PIN);
-    bool collect_data = false;
+    
+    bool calibrate = false; // TODO: update to pull from server
+    float sonar_distance = getSonar();
+    float button_state = digitalRead(BUTTON_PIN);
 
-    JsonArray labels = json_doc.createNestedArray("labels");
-    JsonArray sonar = json_doc.createNestedArray("sonar");
-    JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
-
-    // Press the Label Button once to initiate data collection
-    if(label_state == 0){
-      Serial.println("Collecting data");
-      collect_data = true;
-    }
-    // Change to collect data every second or so
-    while(collect_data){
-        
+    while(calibrate){
       static unsigned long lastRefreshTime = 0;
       if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
-        JsonArray labels = json_doc.createNestedArray("labels");
         JsonArray sonar = json_doc.createNestedArray("sonar");
         JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
         
@@ -164,64 +152,15 @@ void loop() {
         
         sonar_distance = getSonar();
         button_state = digitalRead(BUTTON_PIN);
-        label_state = digitalRead(LABEL_PIN);
         
-        labels.add(label_state);
         sonar.add(sonar_distance);
         bed_sensor.add(button_state);
         
         String json;
         serializeJson(json_doc, json);
-        int httpResponseCode = http.POST(json);
-        Serial.print("Sent Json with response: ");
-        Serial.print(httpResponseCode);
-        Serial.println("");
-
-        if (label_state == 1){
-          Serial.println("Halting");
-          
-          startTime = millis();
-          while (millis() - startTime <= savePeriod){ 
-              JsonArray labels = json_doc.createNestedArray("labels");
-              JsonArray sonar = json_doc.createNestedArray("sonar");
-              JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
-
-              sonar_distance = getSonar();
-              button_state = digitalRead(BUTTON_PIN);
-              label_state = digitalRead(LABEL_PIN);
-              
-              labels.add(label_state);
-              sonar.add(sonar_distance);
-              bed_sensor.add(button_state);
-
-              String json;
-              serializeJson(json_doc, json);
-              int httpResponseCode = http.POST(json);
-              Serial.print("Sent Json with response: ");
-              Serial.print(httpResponseCode);
-              Serial.println("");
-          }
-        collect_data = false;
-        } 
+        http.POST(json);
+        
 	    }
-      // // Leave bed, let go of label button
-      
-      //   Serial.println("Data collection halting");
-      //   startTime = millis();
-      //   while (millis() - startTime <= savePeriod){ 
-      //     sonar_distance = getSonar();
-      //     button_state = digitalRead(BUTTON_PIN);
-      //     label_state = digitalRead(LABEL_PIN);
-      //     labels.add(label_state);
-      //     sonar.add(sonar_distance);
-      //     bed_sensor.add(button_state);
-      //     // Serial.println(".");
-      //   }
-        
-        // collect_data = false;
-        // Serial.println("\Sending JSON Object");
-        
-        // serializeJsonPretty(json_doc, Serial);
     }
   }
 }
@@ -286,4 +225,67 @@ void trigger_spotify_playback(){
     http.begin(url);
     Serial.println("Sleeping: Spotify Play");
     int httpResponseCode = http.GET();   
+}
+
+void get_parameters(){
+  // HTTPClient http;
+  httpGETRequest("http://3.138.135.239:3000/settings");
+  // Serial.println(sensorReadings);
+}
+
+void httpGETRequest(const char* serverName) {
+  WiFiClient client;
+  HTTPClient http;
+    
+  // Your Domain name with URL path or IP address with path
+  http.begin(client, serverName);
+  int httpResponseCode = http.GET();
+  String payload = "{}"; 
+  if (httpResponseCode>0) {
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+    
+    payload = http.getString();
+    Serial.println(payload);
+    
+    StaticJsonDocument<200> doc;
+    // String json[] = 
+    const int length = payload.length();
+ 
+    // declaring character array (+1 for null terminator)
+    char* char_array = new char[length + 1];
+ 
+    // copying the contents of the
+    // string to char array
+    strcpy(char_array, payload.c_str());
+    
+    DeserializationError error = deserializeJson(doc, char_array);
+    
+    // Test if parsing succeeds.
+    if (error) {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+    }
+
+  // Fetch values.
+
+  double w1 = doc["logistic_regression_weights"]["w"][0][0];
+  double w2 = doc["logistic_regression_weights"]["w"][0][1];
+  double bias = doc["logistic_regression_weights"]["b"][0];
+  log_reg_w1 = w1;
+  log_reg_w2 = w2;
+  log_reg_b = bias; 
+  // Print values.
+  Serial.println(w1);
+  Serial.println(w2);
+  Serial.println(bias);
+  
+  }
+  else {
+    Serial.print("Error code: ");
+    Serial.println(httpResponseCode);
+  }
+  // Free resources
+  http.end();
+
 }
