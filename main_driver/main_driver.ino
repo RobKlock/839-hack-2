@@ -99,6 +99,39 @@ float getSonar() {
 	return distance; // return the distance value
 }
 
+/*Samarth: Hopefully this piece of code does the right inference
+input: array of [weights,bias] and data features
+returns 1: for true; 0 for false; -1 for something went wrong
+
+
+int inference(model="LR",float weights=[0,0,0],float data=[0,0,0]){
+
+  int Nw=sizeof(weights)
+  int Nd=sizeof(data)
+  int N=Nw
+  const double e=2.71828;
+  float threshold=0.5 //default threshold
+  if (Nw!=Nd){
+    Serial.print("weight and data dimension do not match. The arrays should be of the same length\n")
+    return -1
+  }
+
+  if (model=="LR"){
+    double logit=0
+    for (int i=0; i<N; i++){
+      logit+=weights[i]*data[i]
+    }
+    logit=1/(1+pow(e, -logit))
+  }
+  if (logit>0.5){
+    return 1
+  }
+  else{
+    return 0
+  }
+}
+*/
+
 void loop() {
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
