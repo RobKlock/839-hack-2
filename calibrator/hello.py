@@ -3,8 +3,12 @@ from flask import Flask, jsonify, render_template, request
 import requests
 import urllib.request
 import json,os
+import sys
 
+#import from leanring_module/learn.py
+sys.path.append(os.path.abspath("./../learning_module/"))
 from learn import process_inputs, LogisticRegressionModel, DecisionTreeModel
+
 app = Flask(__name__)
 
 # Shamelessly copied from https://github.com/pallets/flask/tree/2.0.3/examples/javascript
