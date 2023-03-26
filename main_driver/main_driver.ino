@@ -100,69 +100,46 @@ float getSonar() {
 }
 
 void loop() {
+  StaticJsonDocument<200> json_doc;
+  HTTPClient http;
+  http.begin("http://3.138.135.239:3000/data");
+  http.addHeader("Content-Type", "application/json"); 
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
+  static unsigned long lastRefreshTime = 0;
+  if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
+    JsonArray sonar = json_doc.createNestedArray("sonar");
+    JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
+    
+    lastRefreshTime += REFRESH_INTERVAL;
+    sonar_distance = getSonar();
+    button_state = digitalRead(BUTTON_PIN);
+    
+    sonar.add(sonar_distance);
+    bed_sensor.add(button_state);
+    
+    String json;
+    serializeJson(json_doc, json);
+    http.POST(json);
+  }
 
-  StaticJsonDocument<5000> json_doc;
-  
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   // Sleep context criteria
-  if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
-    if(state==1){
-      delay(500);
-    }
-    if (state==0){ 
-      sleep_context();
-      state=1;
-    }
-  }
-  // Bed calibration
-  else if(state == 3){
-    float sonar_distance = getSonar();
-    float button_state = digitalRead(BUTTON_PIN);
-    float label_state = digitalRead(LABEL_PIN);
-    Serial.println(button_state);
-    Serial.println(label_state);
-    Serial.println(sonar_distance);
-    Serial.println("======");
-  }
-  else if(state != 2){
-    wake_context();
-    state=0;
-    delay(500);
-  }
+  // if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
+  //   if(state==1){
+  //     delay(500);f
+  //   }
+  //   if (state==0){ 
+  //     sleep_context();
+  //     state=1;
+  //   }
+  // }
   
-  // Data collection context 
-  else{
-    HTTPClient http;
-    http.begin("http://3.138.135.239:3000/data");
-    http.addHeader("Content-Type", "application/json"); 
-    
-    bool calibrate = false; // TODO: update to pull from server
-    float sonar_distance = getSonar();
-    float button_state = digitalRead(BUTTON_PIN);
-
-    while(calibrate){
-      static unsigned long lastRefreshTime = 0;
-      if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
-        JsonArray sonar = json_doc.createNestedArray("sonar");
-        JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
-        
-        lastRefreshTime += REFRESH_INTERVAL;
-        
-        sonar_distance = getSonar();
-        button_state = digitalRead(BUTTON_PIN);
-        
-        sonar.add(sonar_distance);
-        bed_sensor.add(button_state);
-        
-        String json;
-        serializeJson(json_doc, json);
-        http.POST(json);
-        
-	    }
-    }
-  }
+  // else{
+  //   wake_context();
+  //   state=0;
+  //   delay(500);
+  // }
 }
 
 void sleep_context(){
