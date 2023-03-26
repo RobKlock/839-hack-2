@@ -39,9 +39,10 @@ unsigned long startTime;
 unsigned long savePeriod = 3000; // ms
 static const unsigned long REFRESH_INTERVAL = 1500; // ms
 
+// Arbitrary values to compare to 
 float log_reg_w1;
 float log_reg_w2;
-float log_reg_b; 
+float log_reg_b;
 
 int state = 2; // 0 = waking, 1 = sleeping, 2 = calibration/debugging
 
@@ -81,12 +82,9 @@ void setup() {
     Serial.println("Can't Connect");
   }
   Serial.println("Wifi Connected");
-  
-  get_parameters();
   calibrate();
-  get_parameters();
-  
 }
+
 float getSonar() {
 	unsigned long pingTime;
 	float distance;
@@ -106,9 +104,11 @@ input: array of [weights,bias] and data features
 returns 1: for true; 0 for false; -1 for something went wrong
 */
 void calibrate(){
+  get_parameters();
   float old_lr1 = log_reg_w1;
   float old_lr2 = log_reg_w2;
-  while (old_lr1 != log_reg_w1 and old_lr2 != log_reg_w2){ 
+  
+  while (!(log_reg_w1 == old_lr1)){ 
     static unsigned long lastRefreshTime = 0;
     if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
       StaticJsonDocument<200> json_doc;
@@ -121,8 +121,6 @@ void calibrate(){
       JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
       
       lastRefreshTime += REFRESH_INTERVAL;
-      sonar_distance = getSonar();
-      button_state = digitalRead(BUTTON_PIN);
       
       sonar.add(sonar_distance);
       bed_sensor.add(button_state);
@@ -130,10 +128,17 @@ void calibrate(){
       String json;
       serializeJson(json_doc, json);
       http.POST(json);  
-      get_parameters();
+      
     }
+    // Update params
+    get_parameters();
   }
+  
   Serial.println("Calibrated");
+  Serial.print("Old w1: ");
+  Serial.println(old_lr1);
+  Serial.print("New w1: ");
+  Serial.println(log_reg_w1);
 }
 
 int inference(float w1, float w2, float b, float sonar, float button_state){
@@ -162,6 +167,7 @@ void loop() {
   float button_state = digitalRead(BUTTON_PIN);
   static unsigned long lastRefreshTime = 0;
   if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
+    get_parameters();
     JsonArray sonar = json_doc.createNestedArray("sonar");
     JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
     
@@ -175,32 +181,23 @@ void loop() {
     String json;
     serializeJson(json_doc, json);
     http.POST(json);
-   }
-
-  // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
-  // Sleep context criteria
-  int infer_val = inference(log_reg_w1, log_reg_w2, log_reg_b, sonar_distance, button_state);
-  if(infer_val == 1) { 
-    if(state==1){
-      delay(5);
-    }
-    if (state==0){ 
+    
+    int infer_val = inference(log_reg_w1, log_reg_w2, log_reg_b, sonar_distance, button_state);
+    Serial.println(infer_val);
+    // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
+    // Sleep context criteria
+    // 0 is waking, 1 is sleeping
+    // Infer 0 is awake 
+    // Sleep context criteria
+    if(infer_val == 1) { 
       sleep_context();
-      state=1;
+     
     }
-  }
-  
-  else{
-    if(state==0){
-      delay(5);
-    }
-    if(state==1){
-      delay(5);
+    // infer val is 0
+    else {
       wake_context();
-      state=0;
-      
     }
-   
+  
   }
 }
 
@@ -276,11 +273,11 @@ void get_parameters() {
   int httpResponseCode = http.GET();
   String payload = "{}"; 
   if (httpResponseCode>0) {
-    Serial.print("HTTP Response code: ");
-    Serial.println(httpResponseCode);
+    // Serial.print("HTTP Response code: ");
+    // Serial.println(httpResponseCode);
     
     payload = http.getString();
-    Serial.println(payload);
+    // Serial.println(payload);
     
     StaticJsonDocument<200> doc;
     // String json[] = 
@@ -306,13 +303,16 @@ void get_parameters() {
   double w1 = doc["logistic_regression_weights"]["w"][0][0];
   double w2 = doc["logistic_regression_weights"]["w"][0][1];
   double bias = doc["logistic_regression_weights"]["b"][0];
-  log_reg_w1 = w1;
-  log_reg_w2 = w2;
-  log_reg_b = bias; 
+  if (w1 != log_reg_w1 and w2 != log_reg_w2 and bias != log_reg_b){
+    log_reg_w1 = w1;
+    log_reg_w2 = w2;
+    log_reg_b = bias; 
   // Print values.
-  Serial.println(w1);
-  Serial.println(w2);
-  Serial.println(bias);
+
+    Serial.println(w1);
+    Serial.println(w2);
+    Serial.println(bias);
+  }
   
   }
   else {
