@@ -83,6 +83,8 @@ void setup() {
   Serial.println("Wifi Connected");
   
   get_parameters();
+  calibrate();
+  get_parameters();
   
 }
 float getSonar() {
@@ -102,35 +104,54 @@ float getSonar() {
 /*Samarth: Hopefully this piece of code does the right inference
 input: array of [weights,bias] and data features
 returns 1: for true; 0 for false; -1 for something went wrong
-
-
-int inference(model="LR",float weights=[0,0,0],float data=[0,0,0]){
-
-  int Nw=sizeof(weights)
-  int Nd=sizeof(data)
-  int N=Nw
-  const double e=2.71828;
-  float threshold=0.5 //default threshold
-  if (Nw!=Nd){
-    Serial.print("weight and data dimension do not match. The arrays should be of the same length\n")
-    return -1
-  }
-
-  if (model=="LR"){
-    double logit=0
-    for (int i=0; i<N; i++){
-      logit+=weights[i]*data[i]
+*/
+void calibrate(){
+  float old_lr1 = log_reg_w1;
+  float old_lr2 = log_reg_w2;
+  while (old_lr1 != log_reg_w1 and old_lr2 != log_reg_w2){ 
+    static unsigned long lastRefreshTime = 0;
+    if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
+      StaticJsonDocument<200> json_doc;
+      HTTPClient http;
+      http.begin("http://3.138.135.239:3000/data");
+      http.addHeader("Content-Type", "application/json"); 
+      float sonar_distance = getSonar();
+      float button_state = digitalRead(BUTTON_PIN);
+      JsonArray sonar = json_doc.createNestedArray("sonar");  
+      JsonArray bed_sensor = json_doc.createNestedArray("bed_sensor");
+      
+      lastRefreshTime += REFRESH_INTERVAL;
+      sonar_distance = getSonar();
+      button_state = digitalRead(BUTTON_PIN);
+      
+      sonar.add(sonar_distance);
+      bed_sensor.add(button_state);
+      
+      String json;
+      serializeJson(json_doc, json);
+      http.POST(json);  
+      get_parameters();
     }
-    logit=1/(1+pow(e, -logit))
   }
+  Serial.println("Calibrated");
+}
+
+int inference(float w1, float w2, float b, float sonar, float button_state){
+  const double e=2.71828;
+  float threshold=0.5; //default threshold
+
+  double logit=0;
+  logit = (w1 * sonar) + (w2*button_state) + b;
+  logit = 1/(1+pow(e, -logit));
+  
   if (logit>0.5){
-    return 1
+    return 1;
   }
   else{
-    return 0
+    return 0;
   }
 }
-*/
+
 
 void loop() {
   StaticJsonDocument<200> json_doc;
@@ -154,25 +175,33 @@ void loop() {
     String json;
     serializeJson(json_doc, json);
     http.POST(json);
-  }
+   }
 
   // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
   // Sleep context criteria
-  // if( sonar_distance <= DISTANCE_THRESHOLD && button_state==LOW ) {
-  //   if(state==1){
-  //     delay(500);f
-  //   }
-  //   if (state==0){ 
-  //     sleep_context();
-  //     state=1;
-  //   }
-  // }
+  int infer_val = inference(log_reg_w1, log_reg_w2, log_reg_b, sonar_distance, button_state);
+  if(infer_val == 1) { 
+    if(state==1){
+      delay(5);
+    }
+    if (state==0){ 
+      sleep_context();
+      state=1;
+    }
+  }
   
-  // else{
-  //   wake_context();
-  //   state=0;
-  //   delay(500);
-  // }
+  else{
+    if(state==0){
+      delay(5);
+    }
+    if(state==1){
+      delay(5);
+      wake_context();
+      state=0;
+      
+    }
+   
+  }
 }
 
 void sleep_context(){
@@ -207,7 +236,7 @@ void wake_context(){
   digitalWrite(PIN_LED, HIGH); // turn off the green LED
   
   // Debug
-  Serial.println("Waking Context..."); // Serial monitor debugging
+  // Serial.println("Waking Context..."); // Serial monitor debugging
   
   // Warm up temperature (decrease the blue light, increase the red light)
   int i = 0;
@@ -237,13 +266,8 @@ void trigger_spotify_playback(){
     int httpResponseCode = http.GET();   
 }
 
-void get_parameters(){
-  // HTTPClient http;
-  httpGETRequest("http://3.138.135.239:3000/settings");
-  // Serial.println(sensorReadings);
-}
-
-void httpGETRequest(const char* serverName) {
+void get_parameters() {
+  char* serverName = "http://3.138.135.239:3000/settings";
   WiFiClient client;
   HTTPClient http;
     
