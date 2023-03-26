@@ -81,8 +81,9 @@ void setup() {
     Serial.println("Can't Connect");
   }
   Serial.println("Wifi Connected");
-  
-  get_parameters();
+
+  double weights[3] = {0,0,0};
+  get_parameters(weights);
   
 }
 float getSonar() {
@@ -98,39 +99,6 @@ float getSonar() {
 	distance = (float)pingTime * soundVelocity / 2 / 10000;
 	return distance; // return the distance value
 }
-
-/*Samarth: Hopefully this piece of code does the right inference
-input: array of [weights,bias] and data features
-returns 1: for true; 0 for false; -1 for something went wrong
-
-
-int inference(model="LR",float weights=[0,0,0],float data=[0,0,0]){
-
-  int Nw=sizeof(weights)
-  int Nd=sizeof(data)
-  int N=Nw
-  const double e=2.71828;
-  float threshold=0.5 //default threshold
-  if (Nw!=Nd){
-    Serial.print("weight and data dimension do not match. The arrays should be of the same length\n")
-    return -1
-  }
-
-  if (model=="LR"){
-    double logit=0
-    for (int i=0; i<N; i++){
-      logit+=weights[i]*data[i]
-    }
-    logit=1/(1+pow(e, -logit))
-  }
-  if (logit>0.5){
-    return 1
-  }
-  else{
-    return 0
-  }
-}
-*/
 
 void loop() {
   StaticJsonDocument<200> json_doc;
@@ -237,13 +205,13 @@ void trigger_spotify_playback(){
     int httpResponseCode = http.GET();   
 }
 
-void get_parameters(){
+void get_parameters(double* weights){
   // HTTPClient http;
-  httpGETRequest("http://3.138.135.239:3000/settings");
+  httpGETRequest("http://3.138.135.239:3000/settings",weights);
   // Serial.println(sensorReadings);
 }
 
-void httpGETRequest(const char* serverName) {
+void httpGETRequest(const char* serverName,double* weights) {
   WiFiClient client;
   HTTPClient http;
     
@@ -289,7 +257,11 @@ void httpGETRequest(const char* serverName) {
   Serial.println(w1);
   Serial.println(w2);
   Serial.println(bias);
-  
+  //Populate parameters array with values
+  weights[0]=w1;
+  weights[1]=w2;
+  weights[2]=bias;
+
   }
   else {
     Serial.print("Error code: ");
@@ -298,4 +270,29 @@ void httpGETRequest(const char* serverName) {
   // Free resources
   http.end();
 
+}
+
+/*Hopefully this piece of code does the right inference
+input:
+  array of [weights,bias] and data features
+  len=number of parameters
+returns 1: for true; 0 for false; -1 for something went wrong
+*/
+
+int inference(double* weights,double* data, int len=3){
+
+  const double e=2.71828;
+  float threshold=0.5; //default threshold
+
+  double logit=0;
+  for (int i=0; i<len; i++){
+    logit+=weights[i]*data[i];
+  }
+  logit=1/(1+pow(e, -logit));
+  if (logit>0.5){
+    return 1;
+  }
+  else{
+    return 0;
+  }
 }
