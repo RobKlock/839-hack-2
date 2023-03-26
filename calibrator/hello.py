@@ -3,8 +3,12 @@ from flask import Flask, jsonify, render_template, request
 import requests
 import urllib.request
 import json,os
+import sys
 
-from learn import process_inputs, LogisticRegressionModel, DecisionTreeModel
+#import from leanring_module/learn.py
+sys.path.append(os.path.abspath("./../learning_module/"))
+from learn import process_inputs, LogisticRegressionModel, DecisionTreeModel, post_settings
+
 app = Flask(__name__)
 
 # Shamelessly copied from https://github.com/pallets/flask/tree/2.0.3/examples/javascript
@@ -35,18 +39,6 @@ def learn():
     b=LR.clf.intercept_.tolist()
     d={'logistic_regression_weights':{'w':w,'b':b}}
     post_settings(settings=d)
-
-def post_settings(urlstring='http://3.138.135.239:3000',settings=None):
-    surl=urlstring+'/settings'
-    with urllib.request.urlopen(surl) as url:
-        d=json.loads(url.read())
-    for key in settings:
-        d[key]=settings[key]
-    print('posting settings:',d)
-    req =  urllib.request.Request(surl)
-    req.add_header('Content-Type', 'application/json')
-    response=urllib.request.urlopen(req, json.dumps(d).encode('utf-8'))
-    print("response form post:",response)
 
 def add_sample():
     latest_data = requests.get("http://3.138.135.239:3000/data").json()[-1]
