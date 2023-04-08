@@ -16,6 +16,12 @@
 #include <ArduinoJson.h>
 #include "arduino_secrets.h"
 
+//ADC
+#include <Arduino.h>
+#include "ADCSampler.h"
+//#include <analogWrite.h>
+//ADC
+
 // 839 Hack 2 Main Driver
 // This is where everything should happen, integrate things here instead of their own files :)
 // Make a local file called arduino_secrets.h to test on your home wifi/whatever
@@ -26,13 +32,82 @@
 #define PIN_LED 12
 #define pin_led_button 33
 #define TEMP_LED_COLD 0
-#define TEMP_LED_WARM 15
+#define TEMP_LED_WARM 2
 #define trigPin 13
 #define echoPin 14
 #define BUTTON_PIN 5
 #define LABEL_PIN 18
 #define MAX_DISTANCE 700
 #define DISTANCE_THRESHOLD 10 // in centimeters
+
+//ADC start
+#define ADC_SERVER_URL "http://3.138.135.239:3000/adc_samples"
+#define AUDIO_POST_INDICATOR_PIN 15
+volatile int user_in_bed=0;
+WiFiClient *wifiClientADC = NULL;
+HTTPClient *httpClientADC = NULL;
+ADCSampler *adcSampler = NULL;
+
+// i2s config for using the internal ADC
+i2s_config_t adcI2SConfig = {
+    .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_ADC_BUILT_IN),
+    .sample_rate = 16000,
+    .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
+    .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+    .communication_format = I2S_COMM_FORMAT_I2S_LSB,
+    .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+    .dma_buf_count = 4,
+    .dma_buf_len = 1024,
+    .use_apll = false,
+    .tx_desc_auto_clear = false,
+    .fixed_mclk = 0};
+
+  // i2s pins
+i2s_pin_config_t i2sPins = {
+    .bck_io_num = GPIO_NUM_32,
+    .ws_io_num = GPIO_NUM_25,
+    .data_out_num = I2S_PIN_NO_CHANGE,
+    .data_in_num = GPIO_NUM_33};
+
+// how many samples to read at once
+const int SAMPLE_SIZE = 16384;
+
+// send data to a remote address
+void sendData(WiFiClient *wifiClient, HTTPClient *httpClient, const char *url, uint8_t *bytes, size_t count)
+{
+  //send them off to the server
+  digitalWrite(AUDIO_POST_INDICATOR_PIN, HIGH);
+  httpClient->begin(*wifiClient, url);
+  httpClient->addHeader("content-type", "application/octet-stream");
+  httpClient->POST(bytes, count);
+  httpClient->end();
+  digitalWrite(AUDIO_POST_INDICATOR_PIN, LOW);
+  // digitalWrite(AUDIO_POST_INDICATOR_PIN, HIGH);
+  // delay(1000);
+  // digitalWrite(AUDIO_POST_INDICATOR_PIN,LOW);
+}
+
+// Task to write samples from ADC to our server
+void adcWriterTask(void *param)
+{
+  I2SSampler *sampler = (I2SSampler *)param;
+  int16_t *samples = (int16_t *)malloc(sizeof(uint16_t) * SAMPLE_SIZE);
+  if (!samples)
+  {
+    Serial.println("Failed to allocate memory for samples");
+    return;
+  }
+  while (true)
+  {
+    if (user_in_bed){
+    Serial.println("User in Bed");
+    int samples_read = sampler->read(samples, SAMPLE_SIZE);
+    Serial.print("read ");Serial.print(samples_read);Serial.println(" samples");
+    sendData(wifiClientADC, httpClientADC, ADC_SERVER_URL, (uint8_t *)samples, samples_read * sizeof(uint16_t));
+    }
+  }
+}
+//ADC end
 
 unsigned long currentTime;
 unsigned long startTime;
@@ -83,6 +158,21 @@ void setup() {
   }
   Serial.println("Wifi Connected");
   calibrate();
+
+  //ADC start
+  wifiClientADC = new WiFiClient();
+  httpClientADC = new HTTPClient();
+  pinMode(AUDIO_POST_INDICATOR_PIN,OUTPUT);
+  // input from analog microphones such as the MAX9814 or MAX4466
+  // internal analog to digital converter sampling using i2s
+  // create our samplers
+  adcSampler = new ADCSampler(ADC_UNIT_1, ADC1_CHANNEL_7, adcI2SConfig);
+
+  // // set up the adc sample writer task
+  TaskHandle_t adcWriterTaskHandle;
+  adcSampler->start();
+  xTaskCreatePinnedToCore(adcWriterTask, "ADC Writer Task", 4096, adcSampler, 1, &adcWriterTaskHandle, 1);
+  //ADC end
 }
 
 float getSonar() {
@@ -143,13 +233,13 @@ void calibrate(){
 
 int inference(float w1, float w2, float b, float sonar, float button_state){
   const double e=2.71828;
-  float threshold=0.5; //default threshold
+  float threshold=0.2; //default threshold
 
   double logit=0;
   logit = (w1 * sonar) + (w2*button_state) + b;
   logit = 1/(1+pow(e, -logit));
   
-  if (logit>0.5){
+  if (logit>threshold){
     return 1;
   }
   else{
@@ -182,14 +272,14 @@ void loop() {
     serializeJson(json_doc, json);
     http.POST(json);
     
-    int infer_val = inference(log_reg_w1, log_reg_w2, log_reg_b, sonar_distance, button_state);
-    Serial.println(infer_val);
+    user_in_bed = inference(log_reg_w1, log_reg_w2, log_reg_b, sonar_distance, button_state);
+    Serial.println(user_in_bed);
     // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
     // Sleep context criteria
     // 0 is waking, 1 is sleeping
     // Infer 0 is awake 
     // Sleep context criteria
-    if(infer_val == 1) { 
+    if(user_in_bed == 1) {
       sleep_context();
      
     }
