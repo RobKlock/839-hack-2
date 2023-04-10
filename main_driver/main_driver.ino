@@ -20,6 +20,10 @@
 #include <Arduino.h>
 #include "ADCSampler.h"
 //#include <analogWrite.h>
+// save files onto ESP32
+#include "esp_spiffs.h"
+#include <stdio.h>
+#include <WAVFileWriter.h>
 //ADC
 
 // 839 Hack 2 Main Driver
@@ -69,6 +73,13 @@ i2s_pin_config_t i2sPins = {
     .data_out_num = I2S_PIN_NO_CHANGE,
     .data_in_num = GPIO_NUM_33};
 
+esp_vfs_spiffs_conf_t spiffs_config = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = true,
+    };
+
 // how many samples to read at once
 const int SAMPLE_SIZE = 16384;
 
@@ -92,6 +103,15 @@ void adcWriterTask(void *param)
 {
   I2SSampler *sampler = (I2SSampler *)param;
   int16_t *samples = (int16_t *)malloc(sizeof(uint16_t) * SAMPLE_SIZE);
+  // create wav audio file
+  esp_vfs_spiffs_register(&spiffs_config);
+  FILE *fp = fopen("/spiffs/test.wav", "wb");
+  if(fp == NULL){
+      Serial.println("− failed to open file for writing");
+      return;
+  }
+  // create a new wave file writer
+  WAVFileWriter *writer = new WAVFileWriter(fp, sampler->sample_rate());
   if (!samples)
   {
     Serial.println("Failed to allocate memory for samples");
@@ -102,10 +122,28 @@ void adcWriterTask(void *param)
     if (user_in_bed){
     Serial.println("User in Bed");
     int samples_read = sampler->read(samples, SAMPLE_SIZE);
+    
+    // write audio
+    writer->write(samples, samples_read);
+    
     Serial.print("read ");Serial.print(samples_read);Serial.println(" samples");
     sendData(wifiClientADC, httpClientADC, ADC_SERVER_URL, (uint8_t *)samples, samples_read * sizeof(uint16_t));
     }
   }
+  // and finish the writing
+  writer->finish();
+  fclose(fp);
+  delete writer;
+  // check if there is a wav file
+  FILE *file = fopen("/spiffs/test.wav", "r");
+  if (file == NULL){
+    Serial.println("Audio file doesn't exist!");
+  } else{
+    Serial.println("Successfully create audio file!");
+    fclose(file);
+  }
+  esp_vfs_spiffs_unregister(NULL);
+  // TODO: send audio file to server
 }
 //ADC end
 
