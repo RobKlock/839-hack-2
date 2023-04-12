@@ -20,10 +20,7 @@
 #include <Arduino.h>
 #include "ADCSampler.h"
 //#include <analogWrite.h>
-// save files onto ESP32
-#include "esp_spiffs.h"
-#include <stdio.h>
-#include <WAVFileWriter.h>
+
 //ADC
 
 // 839 Hack 2 Main Driver
@@ -44,8 +41,12 @@
 #define MAX_DISTANCE 700
 #define DISTANCE_THRESHOLD 10 // in centimeters
 
+// server URLs
+#define DATA_SERVER_URL "http://3.138.135.239:3000/data"
+#define SETTINGS_SERVER_URL "http://3.138.135.239:3000/settings"
+#define AUDIO_SERVER_URL "http://3.138.135.239:3001/upload"
 //ADC start
-#define ADC_SERVER_URL "http://3.138.135.239:3000/adc_samples"
+#define ADC_SERVER_URL "http://3.138.135.239:3000/speech_input"
 #define AUDIO_POST_INDICATOR_PIN 15
 volatile int user_in_bed=0;
 WiFiClient *wifiClientADC = NULL;
@@ -73,25 +74,38 @@ i2s_pin_config_t i2sPins = {
     .data_out_num = I2S_PIN_NO_CHANGE,
     .data_in_num = GPIO_NUM_33};
 
-esp_vfs_spiffs_conf_t spiffs_config = {
-        .base_path = "/spiffs",
-        .partition_label = NULL,
-        .max_files = 5,
-        .format_if_mount_failed = true,
-    };
 
 // how many samples to read at once
 const int SAMPLE_SIZE = 16384;
 
 // send data to a remote address
-void sendData(WiFiClient *wifiClient, HTTPClient *httpClient, const char *url, uint8_t *bytes, size_t count)
+void sendData(WiFiClient *wifiClient, HTTPClient *httpClient, const char *url, uint8_t *samplebytes, size_t count)
 {
+  StaticJsonDocument<200> json_doc;
   //send them off to the server
   digitalWrite(AUDIO_POST_INDICATOR_PIN, HIGH);
-  httpClient->begin(*wifiClient, url);
-  httpClient->addHeader("content-type", "application/octet-stream");
-  httpClient->POST(bytes, count);
-  httpClient->end();
+  httpClient->begin(url);
+  int httpCode = httpClient->GET();
+  // Serial.print("Get Code: ");
+  // Serial.println(httpCode);
+  
+  httpClient->addHeader("content-type", "application/json");
+  JsonObject obj = json_doc.createNestedObject();
+  obj["count"] = count;
+
+  // TODO: base64 encode 
+  // int encodedLen = base64_enc_len(samples_num);
+  // char encoded[encodedLen];
+  // base64_encode(encoded, samplebytes, samples_num); 
+  
+  obj["bytes"] = (char *)samplebytes;
+  String json;
+  serializeJson(json_doc, json);
+  // Serial.print("HTTP JSON: ");
+  // Serial.println(json);
+  httpClient->POST(json);
+  // httpClient->POST(bytes, count);
+  // httpClient->end();
   digitalWrite(AUDIO_POST_INDICATOR_PIN, LOW);
   // digitalWrite(AUDIO_POST_INDICATOR_PIN, HIGH);
   // delay(1000);
@@ -101,17 +115,9 @@ void sendData(WiFiClient *wifiClient, HTTPClient *httpClient, const char *url, u
 // Task to write samples from ADC to our server
 void adcWriterTask(void *param)
 {
+  // Serial.println("adcWriterTask Start");
   I2SSampler *sampler = (I2SSampler *)param;
   int16_t *samples = (int16_t *)malloc(sizeof(uint16_t) * SAMPLE_SIZE);
-  // create wav audio file
-  esp_vfs_spiffs_register(&spiffs_config);
-  FILE *fp = fopen("/spiffs/test.wav", "wb");
-  if(fp == NULL){
-      Serial.println("− failed to open file for writing");
-      return;
-  }
-  // create a new wave file writer
-  WAVFileWriter *writer = new WAVFileWriter(fp, sampler->sample_rate());
   if (!samples)
   {
     Serial.println("Failed to allocate memory for samples");
@@ -123,27 +129,11 @@ void adcWriterTask(void *param)
     Serial.println("User in Bed");
     int samples_read = sampler->read(samples, SAMPLE_SIZE);
     
-    // write audio
-    writer->write(samples, samples_read);
-    
     Serial.print("read ");Serial.print(samples_read);Serial.println(" samples");
+    // Serial.println("Send sudio data");
     sendData(wifiClientADC, httpClientADC, ADC_SERVER_URL, (uint8_t *)samples, samples_read * sizeof(uint16_t));
     }
   }
-  // and finish the writing
-  writer->finish();
-  fclose(fp);
-  delete writer;
-  // check if there is a wav file
-  FILE *file = fopen("/spiffs/test.wav", "r");
-  if (file == NULL){
-    Serial.println("Audio file doesn't exist!");
-  } else{
-    Serial.println("Successfully create audio file!");
-    fclose(file);
-  }
-  esp_vfs_spiffs_unregister(NULL);
-  // TODO: send audio file to server
 }
 //ADC end
 
@@ -241,7 +231,7 @@ void calibrate(){
     if(millis() - lastRefreshTime >= REFRESH_INTERVAL){
       StaticJsonDocument<200> json_doc;
       HTTPClient http;
-      http.begin("http://3.138.135.239:3000/data");
+      http.begin(DATA_SERVER_URL);
       http.addHeader("Content-Type", "application/json"); 
       float sonar_distance = getSonar();
       float button_state = digitalRead(BUTTON_PIN);
@@ -289,7 +279,7 @@ int inference(float w1, float w2, float b, float sonar, float button_state){
 void loop() {
   StaticJsonDocument<200> json_doc;
   HTTPClient http;
-  http.begin("http://3.138.135.239:3000/data");
+  http.begin(DATA_SERVER_URL);
   http.addHeader("Content-Type", "application/json"); 
   float sonar_distance = getSonar();
   float button_state = digitalRead(BUTTON_PIN);
@@ -311,6 +301,7 @@ void loop() {
     http.POST(json);
     
     user_in_bed = inference(log_reg_w1, log_reg_w2, log_reg_b, sonar_distance, button_state);
+    Serial.print("user_in_bed: ");
     Serial.println(user_in_bed);
     // if the object is closer than DISTANCE_THRESHOLD cm OR button is pressed, turn off the LED; otherwise, turn on the LED
     // Sleep context criteria
@@ -392,7 +383,7 @@ void trigger_spotify_playback(){
 }
 
 void get_parameters() {
-  char* serverName = "http://3.138.135.239:3000/settings";
+  char* serverName = SETTINGS_SERVER_URL;
   WiFiClient client;
   HTTPClient http;
     
@@ -437,8 +428,11 @@ void get_parameters() {
     log_reg_b = bias; 
   // Print values.
 
+    Serial.print("w1: ");
     Serial.println(w1);
+    Serial.print("w2: ");
     Serial.println(w2);
+    Serial.print("bias: ");
     Serial.println(bias);
   }
   
