@@ -19,6 +19,7 @@
 //ADC
 #include <Arduino.h>
 #include "ADCSampler.h"
+#include "base64.h"
 //#include <analogWrite.h>
 
 //ADC
@@ -46,7 +47,7 @@
 #define SETTINGS_SERVER_URL "http://3.138.135.239:3000/settings"
 #define AUDIO_SERVER_URL "http://3.138.135.239:3001/upload"
 //ADC start
-#define ADC_SERVER_URL "http://3.138.135.239:3000/speech_input"
+#define ADC_SERVER_URL "http://3.138.135.239:3000/speech_output"
 #define AUDIO_POST_INDICATOR_PIN 15
 volatile int user_in_bed=0;
 WiFiClient *wifiClientADC = NULL;
@@ -79,7 +80,7 @@ i2s_pin_config_t i2sPins = {
 const int SAMPLE_SIZE = 16384;
 
 // send data to a remote address
-void sendData(WiFiClient *wifiClient, HTTPClient *httpClient, const char *url, uint8_t *samplebytes, size_t count)
+void sendData(WiFiClient *wifiClient, HTTPClient *httpClient, const char *url, const char *samples, size_t count)
 {
   StaticJsonDocument<200> json_doc;
   //send them off to the server
@@ -89,23 +90,28 @@ void sendData(WiFiClient *wifiClient, HTTPClient *httpClient, const char *url, u
   // Serial.print("Get Code: ");
   // Serial.println(httpCode);
   
+  // Request JSON body:
+  //   {
+  //   "queryInput": {
+  //     "audioConfig": {
+  //       "languageCode": "en-US"
+  //     }
+  //   },
+  //   "inputAudio": "AUDIO_BASE64_STRING"
+  // }
   httpClient->addHeader("content-type", "application/json");
-  JsonObject obj = json_doc.createNestedObject();
+  JsonObject obj = json_doc.to<JsonObject>();
   obj["count"] = count;
+  obj["queryInput"]["audioConfig"]["languageCode"] = "en-US";
+  obj["inputAudio"] = samples;
 
-  // TODO: base64 encode 
-  // int encodedLen = base64_enc_len(samples_num);
-  // char encoded[encodedLen];
-  // base64_encode(encoded, samplebytes, samples_num); 
-  
-  obj["bytes"] = (char *)samplebytes;
   String json;
   serializeJson(json_doc, json);
-  // Serial.print("HTTP JSON: ");
-  // Serial.println(json);
+  Serial.print("HTTP JSON: ");
+  Serial.println(json);
+
   httpClient->POST(json);
-  // httpClient->POST(bytes, count);
-  // httpClient->end();
+  httpClient->end();
   digitalWrite(AUDIO_POST_INDICATOR_PIN, LOW);
   // digitalWrite(AUDIO_POST_INDICATOR_PIN, HIGH);
   // delay(1000);
@@ -129,9 +135,12 @@ void adcWriterTask(void *param)
     Serial.println("User in Bed");
     int samples_read = sampler->read(samples, SAMPLE_SIZE);
     
-    Serial.print("read ");Serial.print(samples_read);Serial.println(" samples");
-    // Serial.println("Send sudio data");
-    sendData(wifiClientADC, httpClientADC, ADC_SERVER_URL, (uint8_t *)samples, samples_read * sizeof(uint16_t));
+    Serial.print("audio sample read: ");Serial.print(samples_read);
+    // base64 encode it
+    std::string base64_text = base64_encode((unsigned char const*)samples, samples_read * sizeof(uint16_t));
+    // Serial.println(base64_text.c_str());
+    Serial.println("Send sudio data");
+    sendData(wifiClientADC, httpClientADC, ADC_SERVER_URL, base64_text.c_str(), samples_read * sizeof(uint16_t));
     }
   }
 }
